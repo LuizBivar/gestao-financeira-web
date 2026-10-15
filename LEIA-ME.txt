@@ -1,0 +1,14 @@
+SGFP — Prova de Conceito REV00
+
+ESTADO: protótipo local, não pronto para uso financeiro.
+Para testar em computador com Python 3 instalado:
+1. Abra um terminal nesta pasta.
+2. Execute: python -m http.server 8000
+3. Abra http://localhost:8000 no navegador.
+4. Insira registros fictícios; exporte JSON; limpe o teste apenas se desejado; importe JSON.
+
+Observações:
+- O OneDrive não serve este código como aplicativo Web. A publicação em HTTPS depende de etapa posterior.
+- A câmera só faz seleção/captura de arquivo, sem OCR.
+- NÃO existe sincronização com OneDrive nem criptografia local.
+- Não carregue documentos bancários reais neste protótipo.
