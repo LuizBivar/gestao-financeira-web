@@ -1,7 +1,7 @@
 'use strict';
 window.SGFP_REV05=(function(){
 const enc=new TextEncoder(),dec=new TextDecoder(),rounds=310000;
-const b64=a=>btoa(String.fromCharCode(...a)),un64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const b64=a=>{let s='';for(let i=0;i<a.length;i+=8192)s+=String.fromCharCode(...a.subarray(i,i+8192));return btoa(s)},un64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 async function key(password,salt){if(typeof password!=='string'||password.length<12)throw Error('Senha deve ter pelo menos 12 caracteres');const material=await crypto.subtle.importKey('raw',enc.encode(password),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',hash:'SHA-256',salt,iterations:rounds},material,{name:'AES-GCM',length:256},false,['encrypt','decrypt']);}
 async function encrypt(data,password){const plain=enc.encode(JSON.stringify(data));if(plain.length>10000000)throw Error('Arquivo maior que 10 MB');const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));const cipher=await crypto.subtle.encrypt({name:'AES-GCM',iv},await key(password,salt),plain);return {format:'SGFP-CRYPT-REV05',version:1,iterations:rounds,salt:b64(salt),iv:b64(iv),ciphertext:b64(new Uint8Array(cipher))};}
 async function decrypt(x,password){if(!x||x.format!=='SGFP-CRYPT-REV05'||x.version!==1||x.iterations!==rounds)throw Error('Formato não reconhecido');const salt=un64(x.salt),iv=un64(x.iv),cipher=un64(x.ciphertext);if(salt.length!==16||iv.length!==12||cipher.length<16||cipher.length>10000016)throw Error('Estrutura inválida');try{return JSON.parse(dec.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv},await key(password,salt),cipher)));}catch(e){throw Error('Senha incorreta ou arquivo corrompido');}}
