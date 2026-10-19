@@ -5,6 +5,12 @@ let db=null,handle=null,baseline=null,dirty=false,password='',busy=false;
 const enc=new TextEncoder(),types=[{description:'SGFP criptografado',accept:{'application/octet-stream':['.sgfpe']}}];
 const msg=x=>$('status').textContent=x;
 const money=x=>(x/100).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+// Digitacao em centavos: 1 → 0,01; 1234 → 12,34; valores persistidos como centavos inteiros.
+const brFormat=n=>(n/100).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const brMoney=x=>{const s=String(x||'').replace(/\s/g,'');if(!/^\d{1,3}(?:\.\d{3})*,\d{2}$|^\d+,\d{2}$/.test(s))throw Error('Valor monetário inválido');const n=Number(s.replace(/\./g,'').replace(',','.'));if(!Number.isFinite(n)||n<=0)throw Error('Informe valor superior a R$ 0,00');return n;};
+for(const input of document.querySelectorAll('[data-brl]')){input.value='0,00';input.addEventListener('input',()=>{const digits=input.value.replace(/\D/g,'').slice(0,13);input.value=brFormat(Number(digits||0));});input.addEventListener('focus',()=>input.select());}
+$('refreshApp').addEventListener('click',()=>{if(dirty&&!confirm('Existem alterações NÃO SALVAS. Atualizar descartará essas alterações. Deseja continuar?'))return;const url=new URL(window.location.href);url.searchParams.set('atualizacao',Date.now().toString());window.location.replace(url.href);});
+
 const sha=async a=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',a))).map(n=>n.toString(16).padStart(2,'0')).join('');
 const bytes=x=>enc.encode(JSON.stringify(x,null,2));
 function pass(){const p=$('password').value;if(p.length<12)throw Error('Senha de teste com pelo menos 12 caracteres');return p;}
@@ -24,9 +30,9 @@ async function attach(h,p){const old=await read(h);const obj=await C.decrypt(old
 $('create').onclick=async()=>{try{if(!drop())return;const p=pass();const h=await showSaveFilePicker({suggestedName:'Base_Ficticia_REV08.sgfpe',types});const obj={formato:'SGFP-REV08-CRIPTO',revisao:0,dados:M.seed()};const sealed=await C.encrypt(obj,p);const w=await h.createWritable();await w.write(bytes(sealed));await w.close();await attach(h,p);msg('Base nova criada e conferida. Salve apenas dados fictícios.');}catch(e){msg(e.name==='AbortError'?'Criação cancelada.':'Erro: '+e.message)}};
 $('open').onclick=async()=>{try{if(!drop())return;const p=pass();const [h]=await showOpenFilePicker({types});await attach(h,p);}catch(e){msg(e.name==='AbortError'?'Seleção cancelada.':'Falha ao abrir: '+e.message)}};
 function change(f){if(!db||busy)return;try{f(db.dados);dirty=true;show();msg('Alterações pendentes: salve com backup obrigatório.');}catch(e){msg('Erro: '+e.message)}}
-$('entry').onsubmit=e=>{e.preventDefault();change(d=>M.addEntry(d,{data:$('date').value,descricao:$('description').value,valor:$('value').value,tipo:$('nature').value,categoriaId:$('category').value,contaId:$('account').value}));};
-$('installment').onsubmit=e=>{e.preventDefault();change(d=>M.installment(d,{data:$('pdate').value,descricao:$('pdescription').value,total:$('pvalue').value,parcelas:Number($('pcount').value),cartaoId:$('pcard').value,categoriaId:$('pcategory').value}));};
-$('recurring').onsubmit=e=>{e.preventDefault();change(d=>M.recurring(d,{descricao:$('rdescription').value,valor:$('rvalue').value,dia:Number($('rday').value),tipo:$('rnature').value,categoriaId:$('rcategory').value,contaId:$('raccount').value,inicio:$('month').value+'-01'}));};
+$('entry').onsubmit=e=>{e.preventDefault();change(d=>M.addEntry(d,{data:$('date').value,descricao:$('description').value,valor:brMoney($('value').value),tipo:$('nature').value,categoriaId:$('category').value,contaId:$('account').value}));};
+$('installment').onsubmit=e=>{e.preventDefault();change(d=>M.installment(d,{data:$('pdate').value,descricao:$('pdescription').value,total:brMoney($('pvalue').value),parcelas:Number($('pcount').value),cartaoId:$('pcard').value,categoriaId:$('pcategory').value}));};
+$('recurring').onsubmit=e=>{e.preventDefault();change(d=>M.recurring(d,{descricao:$('rdescription').value,valor:brMoney($('rvalue').value),dia:Number($('rday').value),tipo:$('rnature').value,categoriaId:$('rcategory').value,contaId:$('raccount').value,inicio:$('month').value+'-01'}));};
 $('newAccount').onsubmit=e=>{e.preventDefault();change(d=>{const n=$('accountName').value.trim();if(!n)throw Error('Nome vazio');d.contas.push({id:crypto.randomUUID(),nome:n,tipo:'corrente',saldoInicialCentavos:0});});};
 $('newCategory').onsubmit=e=>{e.preventDefault();change(d=>{const n=$('categoryName').value.trim();if(!n)throw Error('Nome vazio');d.categorias.push({id:crypto.randomUUID(),nome:n,pai:$('parentCategory').value||null});});};
 $('month').onchange=show;
