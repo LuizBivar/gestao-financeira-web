@@ -32,10 +32,19 @@ async function attach(h,p){const old=await read(h);const obj=await C.decrypt(old
 $('create').onclick=async()=>{try{if(!drop())return;const p=pass();const h=await showSaveFilePicker({suggestedName:'Base_Ficticia_REV08.sgfpe',types});const obj={formato:'SGFP-REV08-CRIPTO',revisao:0,dados:M.seed()};const sealed=await C.encrypt(obj,p);const w=await h.createWritable();await w.write(bytes(sealed));await w.close();await attach(h,p);msg('Base nova criada e conferida. Salve apenas dados fictícios.');}catch(e){msg(e.name==='AbortError'?'Criação cancelada.':'Erro: '+e.message)}};
 $('open').onclick=async()=>{try{if(!drop())return;const p=pass();const [h]=await showOpenFilePicker({types});await attach(h,p);}catch(e){msg(e.name==='AbortError'?'Seleção cancelada.':'Falha ao abrir: '+e.message)}};
 function change(f){if(!db||busy)return;try{f(db.dados);dirty=true;show();msg('Alterações pendentes: salve com backup obrigatório.');}catch(e){msg('Erro: '+e.message)}}
-function modifyEntry(id,mode){if(!db||busy)return;const entry=db.dados.lancamentos.find(x=>x.id===id);if(!entry)return; if(mode==='delete'){if(!confirm('Excluir o lançamento fictício "'+entry.descricao+'"? Esta operação só será definitiva após salvar a base com backup.'))return;change(d=>{d.lancamentos=d.lancamentos.filter(x=>x.id!==id)});return;}
-const description=prompt('Descrição do lançamento:',entry.descricao);if(description===null)return;const clean=description.trim();if(!clean||clean.length>120){msg('Descrição inválida');return;}
-const value=prompt('Novo valor em reais, usando vírgula nos centavos:',brFormat(entry.valorCentavos));if(value===null)return;let amount;try{amount=brMoney(value)}catch(e){msg('Valor inválido: '+e.message);return;}const date=prompt('Data no formato AAAA-MM-DD:',entry.data);if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)){msg('Data inválida');return;}
-change(d=>{const x=d.lancamentos.find(y=>y.id===id);if(!x)throw Error('Lançamento não localizado');x.descricao=clean;x.data=date;x.valorCentavos=Math.round(amount*100)});}
+let editingId=null;
+function endEdit(){editingId=null;$('editSection').hidden=true;}
+function modifyEntry(id,mode){if(!db||busy)return;const entry=db.dados.lancamentos.find(x=>x.id===id);if(!entry)return;if(mode==='delete'){if(editingId===id)endEdit();if(!confirm('Excluir o lançamento fictício "'+entry.descricao+'"? A exclusão só será definitiva após salvar com backup.'))return;change(d=>{d.lancamentos=d.lancamentos.filter(x=>x.id!==id)});return;}
+editingId=id;
+options('editAccount',db.dados.contas,v=>v.nome);
+options('editCategory',db.dados.categorias,v=>v.nome);
+$('editDate').value=entry.data;$('editDescription').value=entry.descricao;$('editValue').value=brFormat(entry.valorCentavos);$('editNature').value=entry.tipo;$('editCategory').value=entry.categoriaId;$('editAccount').value=entry.contaId;
+$('editSection').hidden=false;$('editSection').scrollIntoView({behavior:'smooth',block:'center'});$('editDescription').focus();
+}
+$('cancelEdit').onclick=endEdit;
+$('editForm').onsubmit=e=>{e.preventDefault();if(!db||!editingId)return;const id=editingId;const fields={data:$('editDate').value,descricao:$('editDescription').value.trim(),tipo:$('editNature').value,categoriaId:$('editCategory').value,contaId:$('editAccount').value};let centavos;try{const n=brMoney($('editValue').value);centavos=Math.round(n*100);if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(fields.data)||!Number.isFinite(Date.parse(fields.data+'T12:00:00Z')))throw Error('Data inválida');if(!fields.descricao||fields.descricao.length>120||!['receita','despesa'].includes(fields.tipo)||!db.dados.categorias.some(x=>x.id===fields.categoriaId)||!db.dados.contas.some(x=>x.id===fields.contaId))throw Error('Confira os campos do lançamento');}catch(err){msg('Edição não realizada: '+err.message);return;}
+change(d=>{const item=d.lancamentos.find(x=>x.id===id);if(!item)throw Error('Lançamento não encontrado');Object.assign(item,fields,{valorCentavos:centavos});});endEdit();
+};
 
 $('entry').onsubmit=e=>{e.preventDefault();change(d=>M.addEntry(d,{data:$('date').value,descricao:$('description').value,valor:brMoney($('value').value),tipo:$('nature').value,categoriaId:$('category').value,contaId:$('account').value}));};
 $('installment').onsubmit=e=>{e.preventDefault();change(d=>M.installment(d,{data:$('pdate').value,descricao:$('pdescription').value,total:brMoney($('pvalue').value),parcelas:Number($('pcount').value),cartaoId:$('pcard').value,categoriaId:$('pcategory').value}));};
